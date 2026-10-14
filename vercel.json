@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/", "destination": "/web/index.html" },
+    { "source": "/style.css", "destination": "/web/style.css" },
+    { "source": "/app.js", "destination": "/web/app.js" },
+    { "source": "/rc4_bias.png", "destination": "/web/rc4_bias.png" },
+    { "source": "/(.*)", "destination": "/web/$1" }
+  ]
+}
