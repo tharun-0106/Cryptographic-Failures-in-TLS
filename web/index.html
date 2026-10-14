@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cryptographic Failures in TLS | Case Study Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js via CDN (with offline fallback canvas support) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-badge">TLS / 1.3</div>
+        <div>
+          <h1>Cryptographic Failures in TLS</h1>
+          <p class="subtitle">23CSE331 Cryptography &bull; Case Study, Topic 3 &bull; Amrita Vishwa Vidyapeetham</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span id="api-status">API Connected (127.0.0.1)</span>
+        </div>
+        <button class="btn-secondary" id="btn-team-modal">Team Info</button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="tab-audit">
+        <span class="tab-icon">🛡️</span> Server Audit Lab
+      </button>
+      <button class="tab-btn" data-tab="tab-oracle">
+        <span class="tab-icon">🔓</span> CBC Padding Oracle
+      </button>
+      <button class="tab-btn" data-tab="tab-rc4">
+        <span class="tab-icon">📊</span> RC4 Keystream Bias
+      </button>
+      <button class="tab-btn" data-tab="tab-dh">
+        <span class="tab-icon">🔑</span> Weak Diffie-Hellman
+      </button>
+      <button class="tab-btn" data-tab="tab-fs">
+        <span class="tab-icon">🕰️</span> Forward Secrecy
+      </button>
+      <button class="tab-btn" data-tab="tab-matrix">
+        <span class="tab-icon">📋</span> TLS 1.3 Matrix & CVEs
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+      <!-- ================= TAB 1: SERVER AUDIT LAB ================= -->
+      <section id="tab-audit" class="tab-pane active">
+        <div class="section-intro">
+          <h2>Stage 1: Vulnerability Identification & Server Auditing</h2>
+          <p>Audits TLS protocol versions, weak cipher suites (RC4, 3DES, Export), key exchange forward secrecy, certificate parameters, and HSTS headers. Evaluates against NIST & RFC 8996 criteria to assign letter grades (A through F).</p>
+        </div>
+
+        <div class="grid-2col">
+          <!-- Local Lab Simulation Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Local Dual-Server Simulation</h3>
+              <span class="badge badge-purple">127.0.0.1</span>
+            </div>
+            <p class="card-desc">Simultaneously inspects a deliberately vulnerable server (TLS 1.0, 3DES/RC4, 1024-bit expired SHA-1 cert, no HSTS) against a hardened server (TLS 1.2+, ECDHE+AES-GCM, 2048-bit SHA-256 cert, HSTS).</p>
+            <div class="action-row">
+              <button class="btn-primary" id="btn-run-lab-audit">
+                <span class="btn-icon">⚡</span> Run Lab Audit Simulation
+              </button>
+            </div>
+            <div id="lab-audit-spinner" class="spinner-container hidden">
+              <div class="spinner"></div>
+              <span>Auditing localhost ports 9441 & 9442...</span>
+            </div>
+          </div>
+
+          <!-- Remote Host Audit Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Audit Remote Host</h3>
+              <span class="badge badge-blue">Live Network</span>
+            </div>
+            <p class="card-desc">Scan any domain you are authorized to test (e.g. <code>badssl.com</code>, <code>rc4.badssl.com</code>, <code>expired.badssl.com</code>, or <code>google.com</code>).</p>
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="remote-host">Hostname</label>
+                <input type="text" id="remote-host" value="badssl.com" placeholder="example.com">
+              </div>
+              <div class="form-group flex-1">
+                <label for="remote-port">Port</label>
+                <input type="number" id="remote-port" value="443">
+              </div>
+              <div class="form-group" style="align-self: flex-end;">
+                <button class="btn-primary" id="btn-run-remote-audit">
+                  <span class="btn-icon">🔍</span> Audit Host
+                </button>
+              </div>
+            </div>
+            <div class="preset-chips">
+              <span class="preset-label">Quick Presets:</span>
+              <button type="button" class="preset-chip" data-host="badssl.com" data-port="443">badssl.com</button>
+              <button type="button" class="preset-chip" data-host="rc4.badssl.com" data-port="443">rc4.badssl.com</button>
+              <button type="button" class="preset-chip" data-host="expired.badssl.com" data-port="443">expired.badssl.com</button>
+              <button type="button" class="preset-chip" data-host="tls-v1-0.badssl.com" data-port="1010">tls-v1-0 (1010)</button>
+              <button type="button" class="preset-chip" data-host="google.com" data-port="443">google.com</button>
+            </div>
+            <div id="remote-audit-spinner" class="spinner-container hidden">
+              <div class="spinner"></div>
+              <span>Probing remote TLS configuration...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Results Container -->
+        <div id="audit-results-container" class="results-container">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: CBC PADDING ORACLE ================= -->
+      <section id="tab-oracle" class="tab-pane">
+        <div class="section-intro">
+          <h2>Stage 2a: CBC Padding-Oracle Attack</h2>
+          <p>Demonstrates the vulnerability in TLS MAC-then-encrypt CBC mode (Vaudenay 2002 / POODLE CVE-2014-3566 / Lucky13). An active chosen-ciphertext attacker recovers plaintext bytes by observing only 1 bit of feedback: whether the PKCS#7 padding was valid.</p>
+        </div>
+
+        <div class="attack-model-box">
+          <div class="model-row"><strong>Adversary:</strong> Active, chosen-ciphertext attacker with no knowledge of the AES key.</div>
+          <div class="model-row"><strong>Mechanism:</strong> Submits forged ciphertexts with adjusted tail bytes. When valid PKCS#7 padding is detected, the intermediate decrypt value is revealed via XOR.</div>
+          <div class="model-row"><strong>Real-World Incidents:</strong> POODLE (CVE-2014-3566), Lucky13 (CVE-2013-0169), Zombie POODLE.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Oracle Attack Simulation</h3>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-3">
+              <label for="oracle-message">Confidential Plaintext / Session Cookie</label>
+              <input type="text" id="oracle-message" value="Cookie: session=Sup3rS3cretToken" placeholder="Target message">
+            </div>
+            <div class="form-group" style="align-self: flex-end;">
+              <button class="btn-danger" id="btn-run-oracle">
+                <span class="btn-icon">💥</span> Launch Oracle Attack
+              </button>
+            </div>
+          </div>
+
+          <div id="oracle-spinner" class="spinner-container hidden">
+            <div class="spinner"></div>
+            <span>Submitting forged ciphertexts to CBC oracle byte-by-byte...</span>
+          </div>
+
+          <!-- Oracle Decryption Output -->
+          <div id="oracle-output" class="hidden">
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-label">Decryption Result</div>
+                <div class="metric-value text-green" id="oracle-status">SUCCESS</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Oracle Queries</div>
+                <div class="metric-value" id="oracle-queries">0</div>
+                <div class="metric-sub">Avg ~128 queries/byte</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Time Elapsed</div>
+                <div class="metric-value" id="oracle-time">0.00 s</div>
+                <div class="metric-sub">Brute force needs 2<sup>128</sup> tries</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Ciphertext Blocks</div>
+                <div class="metric-value" id="oracle-blocks">0</div>
+                <div class="metric-sub">AES-128-CBC (16 bytes/block)</div>
+              </div>
+            </div>
+
+            <div class="result-box">
+              <h4>Recovered Plaintext (Decrypted without AES Key):</h4>
+              <div class="code-terminal" id="oracle-recovered-text">...</div>
+            </div>
+
+            <div class="countermeasure-box">
+              <h4>🛡️ Countermeasure: AEAD (AES-GCM mandated in TLS 1.3)</h4>
+              <p>In TLS 1.3, MAC-then-encrypt CBC mode is removed. AES-GCM verifies the 16-byte authentication tag <em>before</em> any decryption or padding inspection occurs:</p>
+              <div class="tamper-test">
+                <div class="tamper-stat">
+                  <span class="tamper-num" id="aead-tested">255</span>
+                  <span class="tamper-text">Tampered records tested</span>
+                </div>
+                <div class="tamper-stat">
+                  <span class="tamper-num text-red" id="aead-accepted">0</span>
+                  <span class="tamper-text">Accepted (All rejected via InvalidTag)</span>
+                </div>
+              </div>
+              <p class="tag-note">No padding, no oracle: zero information leaked on decryption failure.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: RC4 KEYSTREAM BIAS ================= -->
+      <section id="tab-rc4" class="tab-pane">
+        <div class="section-intro">
+          <h2>Stage 2b: RC4 Keystream Bias Attack</h2>
+          <p>RC4 is a stream cipher historically used in TLS. Its key scheduling algorithm (KSA) does not generate a perfectly uniform keystream. The second output byte <em>Z</em><sub>2</sub> has a strong bias towards <code>0</code> with probability <em>P</em>(<em>Z</em><sub>2</sub> = 0) &approx; <sup>2</sup>&frasl;<sub>256</sub> = 0.781%, double the ideal <sup>1</sup>&frasl;<sub>256</sub> = 0.391%.</p>
+        </div>
+
+        <div class="attack-model-box">
+          <div class="model-row"><strong>Adversary:</strong> Passive eavesdropper collecting ciphertexts across <em>N</em> sessions of the same repeated secret (e.g. session cookie).</div>
+          <div class="model-row"><strong>Vulnerability:</strong> Mantin-Shamir bias (2001) and AlFardan et al. (2013). Plaintext <em>P</em><sub>2</sub> = <em>C</em><sub>2</sub> &oplus; <em>Z</em><sub>2</sub>. When <em>Z</em><sub>2</sub> = 0, <em>C</em><sub>2</sub> = <em>P</em><sub>2</sub>.</div>
+          <div class="model-row"><strong>Real-World Incident:</strong> RC4 NOMORE attack (2015). RC4 banned entirely in TLS by RFC 7465.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>RC4 Bias Measurement & Byte Recovery</h3>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="rc4-secret">Target Secret String (Byte 2 will be attacked)</label>
+              <input type="text" id="rc4-secret" value="Password123" placeholder="Secret">
+            </div>
+            <div class="form-group flex-2">
+              <label for="rc4-sessions">Number of Simulated Sessions (<span id="rc4-sessions-val">50,000</span>)</label>
+              <input type="range" id="rc4-sessions" min="5000" max="150000" step="5000" value="50000">
+            </div>
+            <div class="form-group" style="align-self: flex-end;">
+              <button class="btn-danger" id="btn-run-rc4">
+                <span class="btn-icon">📈</span> Analyze RC4 Keystream
+              </button>
+            </div>
+          </div>
+
+          <div id="rc4-spinner" class="spinner-container hidden">
+            <div class="spinner"></div>
+            <span>Generating independent random 128-bit RC4 sessions & computing frequency statistics...</span>
+          </div>
+
+          <!-- RC4 Results Container -->
+          <div id="rc4-output" class="hidden">
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-label">Recovered Character</div>
+                <div class="metric-value text-green" id="rc4-guess-char">'a'</div>
+                <div class="metric-sub" id="rc4-match-sub">Target matched!</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Measured P(Z2 = 0)</div>
+                <div class="metric-value text-cyan" id="rc4-measured-p0">0.000%</div>
+                <div class="metric-sub">Theoretical Bias: 0.781% (2/256)</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Ideal Uniform P</div>
+                <div class="metric-value" id="rc4-ideal-p0">0.391%</div>
+                <div class="metric-sub">Uniform distribution: 1/256</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Execution Time</div>
+                <div class="metric-value" id="rc4-time">0.0 s</div>
+                <div class="metric-sub" id="rc4-sessions-count">50,000 sessions</div>
+              </div>
+            </div>
+
+            <!-- Live Chart.js Visualizer -->
+            <div class="chart-wrapper">
+              <div class="chart-title">Probability Distribution of Second RC4 Keystream Byte (<em>Z</em><sub>2</sub> across all 256 byte values)</div>
+              <div class="canvas-container">
+                <canvas id="rc4Chart"></canvas>
+              </div>
+              <div class="chart-legend-box">
+                <span class="legend-indicator" style="background:#00f2fe;"></span> Measured Frequency
+                <span class="legend-indicator" style="background:#ff3366; margin-left: 20px;"></span> Ideal Uniform (1/256 &approx; 0.391%)
+              </div>
+            </div>
+
+            <!-- Candidate Ranking Table -->
+            <div class="ranking-box">
+              <h4>Top Candidate Byte Frequencies:</h4>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Candidate Byte</th>
+                      <th>ASCII Character</th>
+                      <th>Occurrences</th>
+                      <th>Likelihood</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rc4-candidate-rows">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="countermeasure-box">
+              <h4>🛡️ Countermeasure: RFC 7465 RC4 Ban</h4>
+              <p>RFC 7465 prohibits negotiation of RC4 cipher suites in all versions of TLS. Modern ciphers like AES-GCM and ChaCha20-Poly1305 have pseudo-random keystreams indistinguishable from true randomness, eliminating all keystream bias attacks.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: WEAK DIFFIE-HELLMAN ================= -->
+      <section id="tab-dh" class="tab-pane">
+        <div class="section-intro">
+          <h2>Stage 2c: Weak / Export Diffie-Hellman (Logjam-Class)</h2>
+          <p>Demonstrates the Logjam attack (CVE-2015-4000). When a server supports export-grade or weak DH primes (e.g. 512-bit historically, or simulated smaller primes for classroom demonstration), an eavesdropper recording public values (<em>p</em>, <em>g</em>, <em>A</em>, <em>B</em>) can solve the Discrete Logarithm Problem using the <strong>Baby-Step Giant-Step (BSGS)</strong> algorithm and recover the shared AES session key.</p>
+        </div>
+
+        <div class="attack-model-box">
+          <div class="model-row"><strong>Adversary:</strong> Passive network eavesdropper recording traffic in cleartext.</div>
+          <div class="model-row"><strong>Math:</strong> Given <em>A</em> = <em>g</em><sup><em>a</em></sup> mod <em>p</em>, Eve solves for private exponent <em>a</em> in <em>O</em>(&radic;<em>p</em>) operations. Real Logjam used Number Field Sieve (NFS) with precomputed primes.</div>
+          <div class="model-row"><strong>Critical Insight:</strong> The attacker breaks the key exchange; AES itself is never attacked directly!</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Diffie-Hellman Key Exchange & Eve Discrete Log Cracker</h3>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="dh-message">Confidential Message</label>
+              <input type="text" id="dh-message" value="Transfer 100 rupees to Alice" placeholder="Plaintext">
+            </div>
+            <div class="form-group flex-1">
+              <label for="dh-bits">Prime Bit Size (<span id="dh-bits-val">28</span> bits)</label>
+              <input type="range" id="dh-bits" min="16" max="36" step="2" value="28">
+            </div>
+            <div class="form-group" style="align-self: flex-end;">
+              <button class="btn-danger" id="btn-run-dh">
+                <span class="btn-icon">⚡</span> Crack Discrete Log
+              </button>
+            </div>
+          </div>
+
+          <div id="dh-spinner" class="spinner-container hidden">
+            <div class="spinner"></div>
+            <span>Generating prime, exchanging keys, and solving g^x &equiv; A (mod p) using Baby-Step Giant-Step...</span>
+          </div>
+
+          <!-- DH Output Container -->
+          <div id="dh-output" class="hidden">
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-label">Key Exchange Status</div>
+                <div class="metric-value text-red" id="dh-status">COMPROMISED</div>
+                <div class="metric-sub">Eve derived identical AES key</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Prime Size</div>
+                <div class="metric-value" id="dh-bits-metric">28 bits</div>
+                <div class="metric-sub">TLS 1.3 requires &ge; 2048-bit / ECDHE</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Discrete Log Time</div>
+                <div class="metric-value text-cyan" id="dh-time">0.000 s</div>
+                <div class="metric-sub" id="dh-complexity">&sim;2<sup>14</sup> steps (BSGS)</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Eve Decryption</div>
+                <div class="metric-value text-green">100% MATCH</div>
+                <div class="metric-sub">Plaintext recovered</div>
+              </div>
+            </div>
+
+            <div class="key-exchange-flow">
+              <h4>Public Parameters Intercepted by Eve:</h4>
+              <div class="code-terminal" id="dh-public-params">...</div>
+            </div>
+
+            <div class="result-box">
+              <h4>Eve's Decrypted Plaintext:</h4>
+              <div class="code-terminal" id="dh-recovered-text">...</div>
+            </div>
+
+            <div class="countermeasure-box">
+              <h4>🛡️ Countermeasure: Mandate Strong DH Groups & ECDHE</h4>
+              <p>TLS 1.3 completely removes export DH and weak cipher suites. It mandates predefined named groups (e.g. <strong>X25519</strong>, <strong>secp256r1</strong>, or DH &ge; 2048-bit). For 2048-bit primes, solving discrete log requires months of supercomputer precomputation per prime, rendering live attacks computationally infeasible.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: FORWARD SECRECY ================= -->
+      <section id="tab-fs" class="tab-pane">
+        <div class="section-intro">
+          <h2>Stage 2d: Loss of Forward Secrecy & Retroactive Decryption</h2>
+          <p>Evaluates what happens when an attacker passively records encrypted network traffic today, and the server's long-term RSA private key is stolen, leaked, or subpoenaed months or years later (as occurred in the <strong>Heartbleed</strong> vulnerability).</p>
+        </div>
+
+        <div class="attack-model-box">
+          <div class="model-row"><strong>Static RSA Key Exchange:</strong> Client encrypts pre-master secret using server's long-term RSA public key. If the private key is ever compromised, ALL past recorded sessions can be decrypted retroactively.</div>
+          <div class="model-row"><strong>Ephemeral (EC)DHE:</strong> Fresh keypairs are generated per session and wiped from memory after the handshake. A subsequent leak of the long-term identity key cannot decrypt past traffic.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Retroactive Key Compromise Simulation</h3>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-3">
+              <label for="fs-message">Confidential Payload</label>
+              <input type="text" id="fs-message" value="Account PIN is 4821" placeholder="Payload">
+            </div>
+            <div class="form-group" style="align-self: flex-end;">
+              <button class="btn-danger" id="btn-run-fs">
+                <span class="btn-icon">🔓</span> Simulate Key Compromise
+              </button>
+            </div>
+          </div>
+
+          <div id="fs-spinner" class="spinner-container hidden">
+            <div class="spinner"></div>
+            <span>Recording Session A (Static RSA) and Session B (ECDHE), then simulating RSA key compromise...</span>
+          </div>
+
+          <!-- FS Results Container -->
+          <div id="fs-output" class="hidden">
+            <div class="dual-session-grid">
+              <!-- Session A Card -->
+              <div class="session-card session-vulnerable">
+                <div class="session-header">
+                  <h4>Session A: Static RSA Key Exchange</h4>
+                  <span class="badge badge-red">NO FORWARD SECRECY</span>
+                </div>
+                <div class="session-body">
+                  <p><strong>Cipher Suite:</strong> <code>TLS_RSA_WITH_AES_128_GCM_SHA256</code></p>
+                  <p>Client encrypts pre-master secret directly with server's 2048-bit RSA public key.</p>
+                  <div class="compromise-event">
+                    <span class="event-icon">🚨</span>
+                    <span>Server's long-term private key leaked / stolen later</span>
+                  </div>
+                  <div class="outcome-box failure">
+                    <div class="outcome-title text-red">❌ RETROACTIVELY DECRYPTED</div>
+                    <p>Attacker uses stolen private key to decrypt pre-master secret and recovers session plaintext:</p>
+                    <div class="code-terminal text-red" id="fs-session-a-text">...</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Session B Card -->
+              <div class="session-card session-secure">
+                <div class="session-header">
+                  <h4>Session B: Ephemeral ECDHE (X25519)</h4>
+                  <span class="badge badge-green">FORWARD SECURE</span>
+                </div>
+                <div class="session-body">
+                  <p><strong>Cipher Suite:</strong> <code>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</code></p>
+                  <p>Ephemeral keys are exchanged, used to derive session keys, and destroyed immediately.</p>
+                  <div class="compromise-event">
+                    <span class="event-icon">🚨</span>
+                    <span>Server's long-term private key leaked / stolen later</span>
+                  </div>
+                  <div class="outcome-box success">
+                    <div class="outcome-title text-green">✅ IMPENETRABLE (SAFE)</div>
+                    <p>Attacker attempts decryption with stolen RSA key &rarr; fails with <code>InvalidTag</code>. Ephemeral private keys were never stored on disk.</p>
+                    <div class="code-terminal text-green" id="fs-session-b-text">Session ciphertext remains encrypted and secure.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="countermeasure-box" style="margin-top: 20px;">
+              <h4>🛡️ Countermeasure: TLS 1.3 Ephemeral Key Exchange</h4>
+              <p>TLS 1.3 completely removes static RSA key transport. <strong>Ephemeral (EC)DHE is mandatory for every session</strong>. Forward secrecy is guaranteed by default, ensuring historical communications cannot be decrypted even if private keys are compromised.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 6: TLS 1.3 MATRIX & CVES ================= -->
+      <section id="tab-matrix" class="tab-pane">
+        <div class="section-intro">
+          <h2>Stage 3: What TLS 1.3 (RFC 8446) Fixes</h2>
+          <p>A comprehensive architectural comparison showing how TLS 1.3 fundamentally redesigns the protocol to eliminate historical cryptographic failure classes.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Protocol Comparison: TLS 1.2 vs TLS 1.3</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Vulnerability / Failure Class</th>
+                  <th>TLS 1.2 & Earlier</th>
+                  <th>TLS 1.3 (RFC 8446)</th>
+                  <th>Historical Reference / CVE</th>
+                </tr>
+              </thead>
+              <tbody id="matrix-table-body">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-header">
+            <h3>Historical Incident & Threat Model Reference</h3>
+          </div>
+          <div class="cve-grid" id="cve-cards-container">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div>Amrita Vishwa Vidyapeetham &bull; Department of Computer Science and Engineering</div>
+      <div>23CSE331 Cryptography Case Study &bull; Academic Year 2026-27</div>
+    </footer>
+  </div>
+
+  <!-- Team Info Modal -->
+  <div id="team-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Project Submission Details</h3>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Course:</strong> 23CSE331 - Cryptography (Semester V)</p>
+        <p><strong>Topic:</strong> Case Study, Topic 3 &mdash; Cryptographic Failures in TLS</p>
+        <p><strong>Institution:</strong> Amrita Vishwa Vidyapeetham, Coimbatore</p>
+        <h4 style="margin-top: 16px; margin-bottom: 8px;">Submitted By:</h4>
+        <ul class="team-list">
+          <li><strong>Tharun D</strong> &mdash; CB.SC.U4CSE24053</li>
+          <li><strong>Rishikeshwar V T</strong> &mdash; CB.SC.U4CSE24041</li>
+          <li><strong>Vidhyadharan R P</strong> &mdash; CB.SC.U4CSE24058</li>
+          <li><strong>Prithesh S</strong> &mdash; CB.SC.U4CSE24038</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
